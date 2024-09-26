@@ -7,7 +7,7 @@ from PIL import Image
 
 
 
-size = 128, 128
+size = 1920, 1080
 
 infile = sys.argv[1]
 outfile = os.path.splitext(infile)[0] + ".thumbnail"
@@ -22,6 +22,7 @@ if infile != outfile:
 img = Image.open(outfile)
 arr = np.array(img)
 shape = arr.shape
+print(shape)
 
 def pixel_to_byte(px):
     # Extracting the RGB values
