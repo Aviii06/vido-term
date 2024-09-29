@@ -13,8 +13,7 @@ func main() {
 
     // timeElapsed1 := time.Since(benchmark_time).Microseconds()
 
-    f := frame.MakeFrame(os.Args[1])
-    f.Draw()
+    frame.Draw(os.Args[1])
 
     //println("\033[0mTime to time to read: in μs ", timeElapsed1)
     // println(w)
