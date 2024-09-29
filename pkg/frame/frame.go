@@ -1,19 +1,68 @@
 package frame
 
-import "time"
-import "encoding/binary"
-import "vido-term/pkg/pixel"
-import "bufio"
-import "os"
-import "image/png"
-import "image/color"
+import (
+	"bufio"
+	"encoding/binary"
+	"image/color"
+	"image/png"
+	"os"
+	"time"
+	"vido-term/pkg/pixel"
+)
 
+type Frame struct {
+    width int
+    height int
+    pixels []uint32
+}
 
-
-func Draw(file_path string) {
+func (f *Frame) Draw() {
+    var by []byte = make([]byte, 20 * (f.width + 1) * f.height + 1)
 
     benchmark_time := time.Now()
+    currByte := 0
+    for j := 0; j < f.height; j++ {
+        // Write rendering logic here
+        for i := 0; i < f.width; i++ {
+            bb := f.pixels[j*f.width + i]
+            a := make([]byte, 4)
+            binary.LittleEndian.PutUint32(a, bb)
 
+            // Some bitwise magic trust me it works
+            r1, r2 ,r3 := convertToBytes(a[3])
+            g1, g2 ,g3 := convertToBytes(a[2])
+            b1, b2 ,b3 := convertToBytes(a[1])
+
+            var avg byte = (a[0] >> 5 + a[1] >> 5 + a[2] >> 5) / 3
+            var pixByte [20]byte = [20]byte{27, 91, 51, 56, 59, 50, 59, r1, r2, r3, 59, g1, g2, g3, 59, b1, b2, b3, 109, pixel.ColorToAscii[avg+1]}
+
+            for k := 0; k < 20; k++ {
+                by[currByte + k] = pixByte[k]
+            }
+
+            currByte += 20
+
+        }
+
+        // New line
+        by[currByte] = 10
+        currByte += 1
+    }
+    timeElapsed1 := time.Since(benchmark_time).Microseconds()
+
+    writer := bufio.NewWriter(os.Stdout)
+    writer.Write(by)
+    writer.Flush()
+    timeElapsed2 := time.Since(benchmark_time).Microseconds()
+
+    println("\033[0mTime to time to Make frame in μs: ", timeElapsed1)
+    println("\033[0mTime to stdout in μs: ", timeElapsed2)
+
+}
+
+func DrawOptimised(file_path string) {
+
+    benchmark_time := time.Now()
     file, err := os.Open(file_path)
 
     if err != nil {
@@ -38,29 +87,27 @@ func Draw(file_path string) {
     println(width)
     println(height)
 
+    timeElapsed1 := time.Since(benchmark_time).Microseconds()
+
     // Convert each pixel to uint32 in 0x00RRGGBB format
+
+    benchmark_time = time.Now()
     var by []byte = make([]byte, 20 * (width + 100) * height + 1000)
 
     currByte := 0
-    for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-        for x := bounds.Min.X; x < bounds.Max.X; x++ {
+    for y :=0; y < height; y++ {
+        for x := 0; x < width; x++ {
             // Get the pixel color
             rgba := color.RGBAModel.Convert(img.At(x, y)).(color.RGBA)
-            // Pack the R, G, B values into a uint32: 0x00RRGGBB
-            r := uint32(rgba.R)
-            g := uint32(rgba.G)
-            b := uint32(rgba.B)
-            // Note: The first byte is left as 0x00 (for alpha or padding)
-            bb := (r << 24) | (g << 16) | b << 8
-            a := make([]byte, 4)
-            binary.LittleEndian.PutUint32(a, bb)
+            r := byte(rgba.R)
+            g := byte(rgba.G)
+            b := byte(rgba.B)
 
-            r1, r2 ,r3 := convertToBytes(a[3])
-            g1, g2 ,g3 := convertToBytes(a[2])
-            b1, b2 ,b3 := convertToBytes(a[1])
+            r1, r2 ,r3 := convertToBytes(r)
+            g1, g2 ,g3 := convertToBytes(g)
+            b1, b2 ,b3 := convertToBytes(b)
 
-            var avg byte = (a[0] >> 5 + a[1] >> 5 + a[2] >> 5) / 3
-            var pixByte [20]byte = [20]byte{27, 91, 52, 56, 59, 50, 59, r1, r2, r3, 59, g1, g2, g3, 59, b1, b2, b3, 109, pixel.ColorToAscii[avg+1]}
+            var pixByte [20]byte = [20]byte{27, 91, 52, 56, 59, 50, 59, r1, r2, r3, 59, g1, g2, g3, 59, b1, b2, b3, 109, 32}
 
             for k := 0; k < 20; k++ {
                 by[currByte + k] = pixByte[k]
@@ -74,14 +121,26 @@ func Draw(file_path string) {
     }
 
 
-    timeElapsed1 := time.Since(benchmark_time).Microseconds()
 
+    timeElapsed2 := time.Since(benchmark_time).Microseconds()
+
+    benchmark_time = time.Now()
     writer := bufio.NewWriter(os.Stdout)
     writer.Write(by)
     writer.Flush()
-    timeElapsed2 := time.Since(benchmark_time).Microseconds()
+    timeElapsed3 := time.Since(benchmark_time).Microseconds()
 
-    println("\033[0mTime to time to Make frame in μs: ", timeElapsed1)
-    println("\033[0mTime to stdout in μs: ", timeElapsed2)
+    println("\033[0mTime to read in μs: ", timeElapsed1)
+    println("\033[0mTime to time to Make frame in μs: ", timeElapsed2)
+    println("\033[0mTime to stdout in μs: ", timeElapsed3)
+}
+
+func MakeFrame(width int, height int, pixels []uint32) *Frame {
+    f := new(Frame)
+    f.width = width
+    f.height = height
+    f.pixels = pixels
+
+    return f
 }
 
