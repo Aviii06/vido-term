@@ -3,7 +3,8 @@ package frame
 import (
 	"bufio"
 	"encoding/binary"
-	"image/color"
+    "image"
+	// "image/color"
 	"image/png"
 	"os"
 	"time"
@@ -61,7 +62,6 @@ func (f *Frame) Draw() {
 }
 
 func DrawOptimised(file_path string) {
-
     benchmark_time := time.Now()
     file, err := os.Open(file_path)
 
@@ -84,47 +84,50 @@ func DrawOptimised(file_path string) {
 	// Create a slice to hold the uint32 values (size: width * height)
 	width := bounds.Max.X
 	height := bounds.Max.Y
-    println(width)
-    println(height)
 
     timeElapsed1 := time.Since(benchmark_time).Microseconds()
 
-    // Convert each pixel to uint32 in 0x00RRGGBB format
-
     benchmark_time = time.Now()
-    var by []byte = make([]byte, 20 * (width + 100) * height + 1000)
+    var by []byte = make([]byte, 20 * (width + 1) * height + 1)
 
     currByte := 0
-    for y :=0; y < height; y++ {
-        for x := 0; x < width; x++ {
-            // Get the pixel color
-            rgba := color.RGBAModel.Convert(img.At(x, y)).(color.RGBA)
-            r := byte(rgba.R)
-            g := byte(rgba.G)
-            b := byte(rgba.B)
 
-            r1, r2 ,r3 := convertToBytes(r)
-            g1, g2 ,g3 := convertToBytes(g)
-            b1, b2 ,b3 := convertToBytes(b)
+    // Takes about 34 ms on m1 pro 8 gigs.
+    go func() {
+        for y :=0; y < height; y++ {
+            for x := 0; x < width; x++ {
+                // Get the pixel color
+                imgNRGBA, ok := img.(*image.NRGBA)
+                if !ok {
+                    return
+                }
+                offset := imgNRGBA.PixOffset(x, y)
+                r := imgNRGBA.Pix[offset+0]
+                g := imgNRGBA.Pix[offset+1]
+                b := imgNRGBA.Pix[offset+2]
 
-            var pixByte [20]byte = [20]byte{27, 91, 52, 56, 59, 50, 59, r1, r2, r3, 59, g1, g2, g3, 59, b1, b2, b3, 109, 32}
+                r1, r2 ,r3 := convertToBytes(r)
+                g1, g2 ,g3 := convertToBytes(g)
+                b1, b2 ,b3 := convertToBytes(b)
+                var pixByte [20]byte = [20]byte{27, 91, 52, 56, 59, 50, 59, r1, r2, r3, 59, g1, g2, g3, 59, b1, b2, b3, 109, 32}
 
-            for k := 0; k < 20; k++ {
-                by[currByte + k] = pixByte[k]
+                for k := 0; k < 20; k++ {
+                    by[currByte + k] = pixByte[k]
+                }
+                currByte += 20
             }
 
-            currByte += 20
-
+            by[currByte] = 10
+            currByte += 1
         }
-        by[currByte] = 10
-        currByte += 1
-    }
-
+    }()
 
 
     timeElapsed2 := time.Since(benchmark_time).Microseconds()
 
     benchmark_time = time.Now()
+
+    // Slowest part
     writer := bufio.NewWriter(os.Stdout)
     writer.Write(by)
     writer.Flush()
@@ -133,6 +136,9 @@ func DrawOptimised(file_path string) {
     println("\033[0mTime to read in μs: ", timeElapsed1)
     println("\033[0mTime to time to Make frame in μs: ", timeElapsed2)
     println("\033[0mTime to stdout in μs: ", timeElapsed3)
+
+    // println("Width: ", width)
+    // println("Height: ", height)
 }
 
 func MakeFrame(width int, height int, pixels []uint32) *Frame {
